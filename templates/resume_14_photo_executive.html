@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>{{ basics.name or 'Resume' }} — Photo Executive</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700;800&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:#f9fafb;padding:30px 15px;color:#111827;line-height:1.65}
+.r{max-width:880px;margin:0 auto;background:#fff;box-shadow:0 12px 36px rgba(0,0,0,.08)}
+.head{background:#1f2937;color:#fff;padding:42px 55px;display:flex;align-items:center;gap:34px;flex-wrap:wrap;border-bottom:6px solid #b45309}
+.photo{width:130px;height:130px;background:#374151;display:flex;align-items:center;justify-content:center;font-size:2.8rem;font-weight:700;font-family:'Cormorant Garamond',serif;flex-shrink:0;overflow:hidden;border:3px solid #b45309}
+.photo img{width:100%;height:100%;object-fit:cover}
+.head-t{flex:1;min-width:220px}
+.name{font-family:'Cormorant Garamond',serif;font-size:2.7rem;font-weight:700;line-height:1.05;letter-spacing:-0.5px}
+.role{font-style:italic;color:#fbbf24;font-size:1.05rem;margin-top:4px;font-family:'Cormorant Garamond',serif}
+.contacts{margin-top:14px;display:flex;flex-wrap:wrap;gap:6px 22px;font-size:.85rem;color:#d1d5db}
+.body{padding:36px 55px;display:grid;grid-template-columns:2fr 1fr;gap:40px}
+.summary{grid-column:1/3;font-style:italic;color:#374151;border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb;padding:14px 0;margin-bottom:6px;font-family:'Cormorant Garamond',serif;font-size:1.1rem}
+.sec{margin-bottom:24px}
+.sec-t{font-family:'Cormorant Garamond',serif;font-size:1.5rem;font-weight:700;color:#1f2937;margin-bottom:12px;padding-bottom:4px;border-bottom:2px solid #b45309;display:inline-block}
+.exp{margin-bottom:18px}
+.exp-h{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.exp-t{font-family:'Cormorant Garamond',serif;font-weight:700;font-size:1.15rem}
+.exp-d{color:#6b7280;font-style:italic;font-size:.85rem}
+.exp-co{color:#b45309;font-weight:600;font-size:.92rem;margin:2px 0 6px}
+.exp ul{margin-left:18px;font-size:.88rem;color:#374151}
+.side-t{font-family:'Cormorant Garamond',serif;font-size:1.1rem;font-weight:700;color:#1f2937;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;padding-bottom:4px;border-bottom:1px solid #b45309}
+.pill{display:inline-block;border:1px solid #b45309;color:#b45309;padding:3px 9px;border-radius:2px;font-size:.74rem;font-weight:600;margin:3px 2px;background:#fff}
+.edu-item{margin-bottom:12px;font-size:.88rem}
+.edu-deg{font-weight:700;font-family:'Cormorant Garamond',serif;font-size:1.05rem;color:#1f2937}
+@media(max-width:720px){.head,.body{padding:30px}.body{grid-template-columns:1fr}.summary{grid-column:1}}
+</style>
+</head>
+<body>
+<div class="r">
+  <header class="head">
+    <div class="photo">{% if basics.image %}<img src="{{ basics.image }}" alt="{{ basics.name }}">{% else %}{{ (basics.name or 'R')[0]|upper }}{% endif %}</div>
+    <div class="head-t">
+      <h1 class="name">{{ basics.name or 'Your Name' }}</h1>
+      {% if basics.label %}<div class="role">{{ basics.label }}</div>{% endif %}
+      <div class="contacts">
+        {% if basics.email %}<span>{{ basics.email }}</span>{% endif %}
+        {% if basics.phone %}<span>{{ basics.phone }}</span>{% endif %}
+        {% if location_str %}<span>{{ location_str }}</span>{% endif %}
+        {% if basics.url %}<span>{{ basics.url }}</span>{% endif %}
+        {% for p in profiles %}<span>{{ p.url or p.username }}</span>{% endfor %}
+      </div>
+    </div>
+  </header>
+  <div class="body">
+    {% if basics.summary %}<p class="summary">{{ basics.summary }}</p>{% endif %}
+    <div>
+      {% if work %}
+      <div class="sec">
+        <h2 class="sec-t">Professional Experience</h2>
+        {% for w in work %}
+        <div class="exp">
+          <div class="exp-h">
+            <div class="exp-t">{{ w.position }}</div>
+            {% if w.startDate or w.endDate %}<div class="exp-d">{{ w.startDate|head(7) if w.startDate else '' }}{% if w.startDate %} – {% endif %}{{ w.endDate|head(7) if w.endDate else 'Present' }}</div>{% endif %}
+          </div>
+          <div class="exp-co">{{ w.name }}</div>
+          {% if w.summary %}<p style="font-size:.9rem;color:#374151;margin-bottom:4px">{{ w.summary }}</p>{% endif %}
+          {% if w.highlights %}<ul>{% for h in w.highlights %}<li>{{ h }}</li>{% endfor %}</ul>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if projects %}
+      <div class="sec">
+        <h2 class="sec-t">Key Projects</h2>
+        {% for p in projects %}
+        <div class="exp">
+          <div class="exp-h">
+            <div class="exp-t">{{ p.name }}</div>
+            {% if p.startDate or p.endDate %}<div class="exp-d">{{ p.startDate|head(7) if p.startDate else '' }}{% if p.startDate and p.endDate %} – {% endif %}{{ p.endDate|head(7) if p.endDate else '' }}</div>{% endif %}
+          </div>
+          {% if p.description %}<div style="font-size:.88rem;color:#374151;margin:3px 0">{{ p.description }}</div>{% endif %}
+          {% if p.highlights %}<ul>{% for h in p.highlights %}<li>{{ h }}</li>{% endfor %}</ul>{% endif %}
+          {% if p.url %}<div style="font-size:.8rem;color:#b45309;margin-top:3px"><i class="fa-solid fa-link"></i> {{ p.url }}</div>{% endif %}
+          {% if p.keywords %}<div style="margin-top:4px">{% for k in p.keywords %}<span class="pill">{{ k }}</span>{% endfor %}</div>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if awards %}
+      <div class="sec">
+        <h2 class="sec-t">Awards</h2>
+        {% for a in awards %}
+        <div class="exp">
+          <div class="exp-h">
+            <div class="exp-t"><i class="fa-solid fa-star"></i> {{ a.title }}</div>
+            {% if a.date %}<div class="exp-d">{{ a.date }}</div>{% endif %}
+          </div>
+          {% if a.awarder %}<div class="exp-co">{{ a.awarder }}</div>{% endif %}
+          {% if a.summary %}<div style="font-size:.85rem;color:#374151">{{ a.summary }}</div>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if volunteer %}
+      <div class="sec">
+        <h2 class="sec-t">Volunteer Service</h2>
+        {% for v in volunteer %}
+        <div class="exp">
+          <div class="exp-h">
+            <div class="exp-t">{{ v.position }}</div>
+            {% if v.startDate or v.endDate %}<div class="exp-d">{{ v.startDate|head(7) if v.startDate else '' }}{% if v.startDate %} – {% endif %}{{ v.endDate|head(7) if v.endDate else 'Present' }}</div>{% endif %}
+          </div>
+          <div class="exp-co">{{ v.organization }}</div>
+          {% if v.summary %}<p style="font-size:.88rem;color:#374151">{{ v.summary }}</p>{% endif %}
+          {% if v.highlights %}<ul>{% for h in v.highlights %}<li>{{ h }}</li>{% endfor %}</ul>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if publications %}
+      <div class="sec">
+        <h2 class="sec-t">Publications</h2>
+        {% for p in publications %}
+        <div class="exp">
+          <div class="exp-h">
+            <div class="exp-t">{{ p.name }}</div>
+            {% if p.releaseDate %}<div class="exp-d">{{ p.releaseDate }}</div>{% endif %}
+          </div>
+          {% if p.publisher %}<div class="exp-co">{{ p.publisher }}</div>{% endif %}
+          {% if p.summary %}<div style="font-size:.85rem;color:#374151">{{ p.summary }}</div>{% endif %}
+          {% if p.url %}<div style="font-size:.8rem;color:#b45309"><i class="fa-solid fa-link"></i> {{ p.url }}</div>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if references %}
+      <div class="sec">
+        <h2 class="sec-t">References</h2>
+        {% for r in references %}
+        <div class="exp">
+          <div class="exp-t">{{ r.name }}</div>
+          {% if r.reference %}<div style="font-size:.86rem;color:#374151;font-style:italic;margin-top:3px">"{{ r.reference }}"</div>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+
+    <aside>
+      {% if education %}
+      <div class="sec">
+        <h3 class="side-t">Education</h3>
+        {% for e in education %}
+        <div class="edu-item">
+          <div class="edu-deg">{{ e.studyType }}{% if e.area %} — {{ e.area }}{% endif %}</div>
+          <div style="color:#6b7280">{{ e.institution }}</div>
+          {% if e.endDate %}<div style="color:#b45309;font-style:italic;font-size:.78rem">{{ e.endDate|head(4) }}{% if e.score %} · GPA {{ e.score }}{% endif %}</div>{% endif %}
+          {% if e.courses %}<div style="font-size:.74rem;color:#6b7280;margin-top:3px">{{ e.courses|join(', ') }}</div>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if skill_keywords %}<div class="sec"><h3 class="side-t">Core Skills</h3><div>{% for s in skill_keywords %}<span class="pill">{{ s }}</span>{% endfor %}</div></div>{% endif %}
+
+      {% if certificates %}
+      <div class="sec">
+        <h3 class="side-t">Certifications</h3>
+        {% for c in certificates %}
+        <div style="padding:5px 0;font-size:.82rem;border-bottom:1px solid #e5e7eb">
+          <div><i class="fa-solid fa-check"></i> <strong>{{ c.name }}</strong></div>
+          {% if c.issuer %}<div style="color:#6b7280;font-size:.74rem;padding-left:14px">{{ c.issuer }}{% if c.date %} · {{ c.date }}{% endif %}</div>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if languages %}
+      <div class="sec">
+        <h3 class="side-t">Languages</h3>
+        {% for l in languages %}<div style="padding:3px 0;font-size:.82rem">{{ l.language }}{% if l.fluency %} — <em style="color:#6b7280">{{ l.fluency }}</em>{% endif %}</div>{% endfor %}
+      </div>
+      {% endif %}
+
+      {% if interests %}<div class="sec"><h3 class="side-t">Interests</h3><div>{% for i in interests %}<span class="pill">{{ i.name }}</span>{% endfor %}</div></div>{% endif %}
+    </aside>
+  </div>
+</div>
+</body>
+</html>

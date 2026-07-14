@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>{{ basics.name or 'Resume' }} — Gradient</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Montserrat',sans-serif;background:#eef2f7;padding:30px 15px;color:#2d3748;line-height:1.6}
+.resume{max-width:880px;margin:0 auto;background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 20px 60px rgba(102,126,234,.15)}
+.hero{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;padding:55px 55px 70px;text-align:center}
+.name{font-size:2.6rem;font-weight:800;line-height:1;letter-spacing:-0.8px}
+.role{font-size:1.15rem;opacity:.9;margin-top:8px;font-weight:500}
+.contacts{margin-top:22px;display:flex;justify-content:center;flex-wrap:wrap;gap:10px 22px;font-size:.88rem;opacity:.92}
+.contacts span{display:inline-flex;align-items:center;gap:5px}
+.body{padding:40px 50px}
+.grid{display:grid;grid-template-columns:2fr 1fr;gap:40px}
+.summary{background:linear-gradient(135deg,#667eea10,#764ba210);padding:20px 24px;border-radius:12px;font-size:.95rem;color:#4a5568;margin-bottom:26px;line-height:1.7}
+.sec{margin-bottom:26px}
+.sec-t{font-size:1.3rem;font-weight:700;color:#2d3748;margin-bottom:16px;display:flex;align-items:center;gap:10px}
+.sec-t::before{content:"";width:4px;height:22px;background:linear-gradient(180deg,#667eea,#764ba2);border-radius:2px}
+.entry{background:#fafbff;padding:16px 20px;border-radius:10px;margin-bottom:12px;border-left:4px solid #667eea}
+.entry-h{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:4px}
+.entry-t{font-size:1.02rem;font-weight:700;color:#2d3748}
+.entry-d{font-size:.78rem;color:#667eea;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.entry-co{color:#764ba2;font-weight:600;font-size:.88rem;margin-bottom:6px}
+.entry ul{margin-left:18px;font-size:.85rem;color:#4a5568;line-height:1.6}
+.entry ul li{margin-bottom:2px}
+.entry ul li::marker{color:#667eea}
+.side-t{font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:2px;background:linear-gradient(90deg,#667eea,#764ba2);-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:12px}
+.chip{display:inline-block;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:5px 12px;border-radius:20px;font-size:.72rem;font-weight:600;margin:3px}
+.edu-box{padding:12px 14px;background:#fafbff;border-radius:8px;margin-bottom:10px}
+.edu-deg{font-weight:700;font-size:.92rem;color:#2d3748}
+.edu-sch{color:#667eea;font-weight:600;font-size:.84rem;margin:2px 0}
+.edu-meta{color:#a0aec0;font-size:.78rem}
+@media(max-width:720px){.hero{padding:40px 25px 50px}.body{padding:30px 24px}.grid{grid-template-columns:1fr;gap:26px}}
+</style>
+</head>
+<body>
+<div class="resume">
+  <header class="hero">
+    <h1 class="name">{{ basics.name or 'Your Name' }}</h1>
+    {% if basics.label %}<div class="role">{{ basics.label }}</div>{% endif %}
+    <div class="contacts">
+      {% if basics.email %}<span><i class="fa-solid fa-envelope"></i> {{ basics.email }}</span>{% endif %}
+      {% if basics.phone %}<span><i class="fa-solid fa-phone"></i> {{ basics.phone }}</span>{% endif %}
+      {% if location_str %}<span><i class="fa-solid fa-location-dot"></i> {{ location_str }}</span>{% endif %}
+      {% if basics.url %}<span><i class="fa-solid fa-globe"></i> {{ basics.url }}</span>{% endif %}
+      {% for p in profiles %}<span><i class="fa-brands fa-{{ p.network|lower }}"></i> {{ p.url or p.username }}</span>{% endfor %}
+    </div>
+  </header>
+
+  <div class="body">
+    {% if basics.summary %}<p class="summary">{{ basics.summary }}</p>{% endif %}
+
+    <div class="grid">
+      <div>
+        {% if work %}
+        <div class="sec">
+          <h2 class="sec-t">Work Experience</h2>
+          {% for w in work %}
+          <div class="entry">
+            <div class="entry-h">
+              <div class="entry-t">{{ w.position }}</div>
+              {% if w.startDate or w.endDate %}<div class="entry-d">{{ w.startDate|head(7) if w.startDate else '' }}{% if w.startDate %} – {% endif %}{{ w.endDate|head(7) if w.endDate else 'Present' }}</div>{% endif %}
+            </div>
+            <div class="entry-co">{{ w.name }}</div>
+            {% if w.summary %}<p style="font-size:.85rem;color:#4a5568;margin-bottom:4px">{{ w.summary }}</p>{% endif %}
+            {% if w.highlights %}<ul>{% for h in w.highlights %}<li>{{ h }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if projects %}
+        <div class="sec">
+          <h2 class="sec-t">Projects</h2>
+          {% for p in projects %}
+          <div class="entry">
+            <div class="entry-h">
+              <div class="entry-t">{{ p.name }}</div>
+              {% if p.startDate or p.endDate %}<div class="entry-d">{{ p.startDate|head(7) if p.startDate else '' }}{% if p.startDate and p.endDate %} – {% endif %}{{ p.endDate|head(7) if p.endDate else '' }}</div>{% endif %}
+            </div>
+            {% if p.description %}<div style="font-size:.88rem;color:#4a5568;margin:4px 0 6px">{{ p.description }}</div>{% endif %}
+            {% if p.highlights %}<ul style="margin-left:16px">{% for h in p.highlights %}<li>{{ h }}</li>{% endfor %}</ul>{% endif %}
+            {% if p.url %}<div style="font-size:.78rem;color:#667eea;margin:4px 0"><i class="fa-solid fa-link"></i> {{ p.url }}</div>{% endif %}
+            {% if p.keywords %}<div style="margin-top:6px">{% for k in p.keywords %}<span class="chip">{{ k }}</span>{% endfor %}</div>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if volunteer %}
+        <div class="sec">
+          <h2 class="sec-t">Volunteer</h2>
+          {% for v in volunteer %}
+          <div class="entry">
+            <div class="entry-h">
+              <div class="entry-t">{{ v.position }}</div>
+              {% if v.startDate %}<div class="entry-d">{{ v.startDate|head(7) }} – {{ v.endDate|head(7) if v.endDate else 'Present' }}</div>{% endif %}
+            </div>
+            <div class="entry-co">{{ v.organization }}</div>
+            {% if v.summary %}<p style="font-size:.85rem;color:#4a5568;margin-bottom:4px">{{ v.summary }}</p>{% endif %}
+            {% if v.highlights %}<ul>{% for h in v.highlights %}<li>{{ h }}</li>{% endfor %}</ul>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if awards %}
+        <div class="sec">
+          <h2 class="sec-t">Awards</h2>
+          {% for a in awards %}
+          <div class="entry">
+            <div class="entry-h">
+              <div class="entry-t">{{ a.title }}</div>
+              {% if a.date %}<div class="entry-d">{{ a.date }}</div>{% endif %}
+            </div>
+            {% if a.awarder %}<div class="entry-co">{{ a.awarder }}</div>{% endif %}
+            {% if a.summary %}<p style="font-size:.85rem;color:#4a5568">{{ a.summary }}</p>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if publications %}
+        <div class="sec">
+          <h2 class="sec-t">Publications</h2>
+          {% for p in publications %}
+          <div class="entry">
+            <div class="entry-h">
+              <div class="entry-t">{{ p.name }}</div>
+              {% if p.releaseDate %}<div class="entry-d">{{ p.releaseDate }}</div>{% endif %}
+            </div>
+            {% if p.publisher %}<div class="entry-co">{{ p.publisher }}</div>{% endif %}
+            {% if p.summary %}<p style="font-size:.85rem;color:#4a5568">{{ p.summary }}</p>{% endif %}
+            {% if p.url %}<div style="font-size:.78rem;color:#667eea;margin-top:3px"><i class="fa-solid fa-link"></i> {{ p.url }}</div>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if references %}
+        <div class="sec">
+          <h2 class="sec-t">References</h2>
+          {% for r in references %}
+          <div class="entry">
+            <div class="entry-t">{{ r.name }}</div>
+            {% if r.reference %}<div style="font-size:.86rem;color:#4a5568;font-style:italic;margin-top:4px">"{{ r.reference }}"</div>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+
+      <aside>
+        {% if skill_keywords %}
+        <div class="sec">
+          <h3 class="side-t">Skills</h3>
+          <div>{% for s in skill_keywords %}<span class="chip">{{ s }}</span>{% endfor %}</div>
+        </div>
+        {% endif %}
+
+        {% if education %}
+        <div class="sec">
+          <h3 class="side-t">Education</h3>
+          {% for e in education %}
+          <div class="edu-box">
+            <div class="edu-deg">{{ e.studyType }}</div>
+            <div class="edu-sch">{{ e.institution }}</div>
+            {% if e.area or e.endDate %}<div class="edu-meta">{{ e.area or '' }}{% if e.area and e.endDate %} · {% endif %}{{ e.endDate|head(4) if e.endDate else '' }}{% if e.score %} · {{ e.score }}{% endif %}</div>{% endif %}
+            {% if e.courses %}<div style="font-size:.74rem;color:#718096;margin-top:3px">{{ e.courses|join(', ') }}</div>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if languages %}
+        <div class="sec">
+          <h3 class="side-t">Languages</h3>
+          {% for l in languages %}<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #edf2f7;font-size:.88rem"><span>{{ l.language }}</span><span style="color:#667eea">{{ l.fluency }}</span></div>{% endfor %}
+        </div>
+        {% endif %}
+
+        {% if certificates %}
+        <div class="sec">
+          <h3 class="side-t">Certificates</h3>
+          {% for c in certificates %}
+          <div class="edu-box">
+            <div class="edu-deg"><i class="fa-solid fa-check"></i> {{ c.name }}</div>
+            {% if c.issuer %}<div class="edu-sch">{{ c.issuer }}</div>{% endif %}
+            {% if c.date %}<div class="edu-meta">{{ c.date }}</div>{% endif %}
+            {% if c.url %}<div style="font-size:.7rem;color:#667eea;word-break:break-all"><i class="fa-solid fa-link"></i> {{ c.url }}</div>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if interests %}
+        <div class="sec">
+          <h3 class="side-t">Interests</h3>
+          <div>{% for i in interests %}<span class="chip">{{ i.name }}</span>{% endfor %}</div>
+        </div>
+        {% endif %}
+      </aside>
+    </div>
+  </div>
+</div>
+</body>
+</html>
