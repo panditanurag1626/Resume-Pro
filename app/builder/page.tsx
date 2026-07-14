@@ -203,15 +203,17 @@ function TemplateModal({
   useEffect(() => {
     if (!open) return;
     if (templatesCache) {
-      setTemplates(templatesCache);
+      const cached = templatesCache;
+      setTemplates(cached);
       return;
     }
     setLoading(true);
     fetch("/api/templates?limit=100")
       .then((r) => r.json())
       .then((d) => {
-        templatesCache = d?.templates || [];
-        setTemplates(templatesCache);
+        const fetched = d?.templates || [];
+        templatesCache = fetched;
+        setTemplates(fetched);
       })
       .catch(() => setTemplates([]))
       .finally(() => setLoading(false));
