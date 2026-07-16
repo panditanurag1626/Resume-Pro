@@ -211,7 +211,7 @@ function TemplateModal({
     fetch("/api/templates?limit=100")
       .then((r) => r.json())
       .then((d) => {
-        const fetched = d?.templates || [];
+        const fetched = d?.data?.templates || d?.templates || [];
         templatesCache = fetched;
         setTemplates(fetched);
       })
@@ -224,7 +224,7 @@ function TemplateModal({
   const items =
     templates.length > 0
       ? templates
-      : Array.from({ length: 30 }).map((_, i) => ({
+      : Array.from({ length: 62 }).map((_, i) => ({
           id: i + 1,
           name: `Template ${i + 1}`,
           description: "",
