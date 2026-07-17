@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-const IFRAME_W = 1000;
-const IFRAME_H = 1333;
+const IFRAME_W = 794;
+const IFRAME_H = 1123;
 
 function ShowcaseCard({ id, name }: { id: number; name: string }) {
   const ref = useRef<HTMLDivElement>(null);

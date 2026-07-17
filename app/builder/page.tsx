@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, Suspense } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
@@ -154,17 +154,19 @@ function Field({
 
 function SectionShell({
   title,
+  id,
   children,
   onAdd,
   addLabel,
 }: {
   title: string;
+  id?: string;
   children: React.ReactNode;
   onAdd?: () => void;
   addLabel?: string;
 }) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
+    <section id={id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-base font-semibold text-slate-900">{title}</h3>
         {onAdd && (
@@ -186,6 +188,133 @@ function SectionShell({
 // Client-side cache to make subsequent modal opens instant
 let templatesCache: any[] | null = null;
 
+const IFRAME_W = 794;
+const IFRAME_H = 1123;
+
+function ModalTemplatePreview({ id, name }: { id: number; name: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      setScale(entry.contentRect.width / IFRAME_W);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} className="relative aspect-[3/4] overflow-hidden bg-white">
+      {scale > 0 && (
+        <iframe
+          src={`/api/templates/${id}/preview`}
+          title={name}
+          loading="lazy"
+          sandbox="allow-same-origin allow-scripts"
+          className="pointer-events-none absolute left-0 top-0 border-0"
+          style={{
+            width: IFRAME_W,
+            height: IFRAME_H,
+            transform: `scale(${scale})`,
+            transformOrigin: "top left",
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+const PREVIEW_IFRAME_W = 794;
+const PREVIEW_IFRAME_H = 1123;
+
+function FullPagePreview({
+  html,
+  iframeRef,
+}: {
+  html: string;
+  iframeRef: React.RefObject<HTMLIFrameElement>;
+}) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0);
+  const [iframeH, setIframeH] = useState(PREVIEW_IFRAME_H);
+
+  /* ── FIX: Observe wrapper size, compute scale to fit width.
+        No Math.min cap — on narrow screens the scaled content
+        can be smaller than the wrapper, so we let the inner
+        container hold the FULL unscaled A4 dimensions and
+        visually shrink via CSS transform. This way the scrollable
+        area always matches the real content size. ──────────── */
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      const availableW = entry.contentRect.width;
+      const s = Math.min(availableW / PREVIEW_IFRAME_W, 1);
+      setScale(s);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    function onLoaded() {
+      try {
+        const doc = iframe?.contentDocument || iframe?.contentWindow?.document;
+        if (!doc) return;
+        const h = doc.body?.scrollHeight || doc.documentElement?.scrollHeight;
+        if (h && h > 0) setIframeH(h);
+      } catch {}
+    }
+    iframe.addEventListener("load", onLoaded);
+    return () => iframe.removeEventListener("load", onLoaded);
+  }, [html]);
+
+  /* ── FIX: Use FULL unscaled dimensions for the scrollable container.
+        The iframe uses transform:scale to visually shrink, but the
+        DOM box stays at full A4 size (794 × iframeH). This means
+        the wrapper's scrollable area = real content size, so both
+        vertical and horizontal scrollbars appear when needed. ── */
+  return (
+    <div
+      ref={wrapperRef}
+      className="w-full overflow-auto rounded-lg bg-slate-300"
+      style={{ height: "calc(100vh - 84px)" }}
+    >
+      {scale > 0 && (
+        <div
+          style={{
+            width: PREVIEW_IFRAME_W,
+            height: iframeH,
+            margin: "20px auto",
+            position: "relative",
+          }}
+        >
+          <iframe
+            ref={iframeRef}
+            srcDoc={html}
+            title="Resume preview"
+            className="pointer-events-none border-0"
+            style={{
+              width: PREVIEW_IFRAME_W,
+              height: iframeH,
+              border: "none",
+              transform: `scale(${scale})`,
+              transformOrigin: "top left",
+              position: "absolute",
+              top: 0,
+              left: 0,
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TemplateModal({
   open,
   onClose,
@@ -199,6 +328,8 @@ function TemplateModal({
 }) {
   const [templates, setTemplates] = useState<any[]>(templatesCache || []);
   const [loading, setLoading] = useState(false);
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState<string>("all");
 
   useEffect(() => {
     if (!open) return;
@@ -219,10 +350,47 @@ function TemplateModal({
       .finally(() => setLoading(false));
   }, [open]);
 
+  useEffect(() => {
+    if (open) {
+      setQuery("");
+      setCategory("all");
+    }
+  }, [open]);
+
+  const categories = useMemo(() => {
+    const set = new Set<string>();
+    templates.forEach((t: any) => {
+      if (t.category) set.add(t.category);
+      (t.tags || []).forEach((tag: string) => set.add(tag));
+    });
+    return ["all", ...Array.from(set).slice(0, 10)];
+  }, [templates]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return templates.filter((t: any) => {
+      if (
+        category !== "all" &&
+        t.category !== category &&
+        !(t.tags || []).includes(category)
+      ) {
+        return false;
+      }
+      if (!q) return true;
+      return (
+        t.name.toLowerCase().includes(q) ||
+        (t.description || "").toLowerCase().includes(q) ||
+        (t.tags || []).some((tag: string) => tag.toLowerCase().includes(q))
+      );
+    });
+  }, [templates, query, category]);
+
   if (!open) return null;
 
   const items =
-    templates.length > 0
+    filtered.length > 0
+      ? filtered
+      : templates.length > 0
       ? templates
       : Array.from({ length: 62 }).map((_, i) => ({
           id: i + 1,
@@ -233,7 +401,7 @@ function TemplateModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-      <div className="flex h-[80vh] w-full max-w-5xl flex-col rounded-2xl bg-white shadow-xl">
+      <div className="flex h-[85vh] w-full max-w-6xl flex-col rounded-2xl bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
           <h3 className="text-lg font-semibold text-slate-900">
             Choose a template
@@ -252,43 +420,109 @@ function TemplateModal({
           {loading ? (
             <div className="py-12 text-center text-sm text-slate-500">Loading…</div>
           ) : (
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-              {items.map((t: any) => {
-                const active = t.id === currentId;
-                return (
-                  <button
-                    key={t.id}
-                    onClick={() => {
-                      onSelect(t.id);
-                      onClose();
-                    }}
-                    className={`group overflow-hidden rounded-xl border text-left transition ${
-                      active
-                        ? "border-brand-500 ring-2 ring-brand-200"
-                        : "border-slate-200 hover:border-brand-300"
-                    }`}
-                  >
-                    <div className="relative aspect-[3/4] overflow-hidden bg-slate-50">
-                      <iframe
-                        src={`/api/templates/${t.id}/preview`}
-                        title={t.name || `Template ${t.id}`}
-                        className="pointer-events-none absolute left-0 top-0 origin-top-left scale-[0.6] border-0"
-                        style={{ width: "166.67%", height: "166.67%" }}
-                        sandbox="allow-same-origin allow-scripts"
-                        loading="lazy"
-                      />
-                      <div className="absolute inset-0 bg-transparent" />
-                    </div>
-                    <div className="border-t border-slate-200 p-3">
-                      <div className="text-sm font-medium text-slate-900">
-                        {t.name || `Template ${t.id}`}
+            <>
+              <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center">
+                <div className="relative flex-1">
+                  <input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search templates..."
+                    className="block w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-4 pr-9 text-sm shadow-sm placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-200"
+                  />
+                  {query && (
+                    <button
+                      onClick={() => setQuery("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-slate-400 hover:text-slate-600"
+                      aria-label="Clear search"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {categories.map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => setCategory(c)}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                        category === c
+                          ? "border-brand-500 bg-brand-50 text-brand-700"
+                          : "border-slate-300 bg-white text-slate-600 hover:border-slate-400"
+                      }`}
+                    >
+                      {c === "all" ? "All" : c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <p className="mb-4 text-sm text-slate-500">
+                {items.length} of {templates.length} templates
+              </p>
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                {items.map((t: any) => {
+                  const active = t.id === currentId;
+                  return (
+                    <div
+                      key={t.id}
+                      className={`group flex flex-col overflow-hidden rounded-lg bg-white shadow-sm transition hover:shadow-md ${
+                        active
+                          ? "ring-2 ring-brand-500 ring-offset-2"
+                          : ""
+                      }`}
+                    >
+                      <div className="block">
+                        <ModalTemplatePreview id={t.id} name={t.name} />
                       </div>
-                      <div className="text-xs text-slate-500">#{t.id}</div>
+                      <div className="flex flex-1 flex-col p-4">
+                        <h3 className="text-sm font-semibold text-slate-900">
+                          {t.name || `Template ${t.id}`}
+                        </h3>
+                        {t.description && (
+                          <p className="mt-1 line-clamp-2 text-xs text-slate-500">
+                            {t.description}
+                          </p>
+                        )}
+                        {(t.tags || []).length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {(t.tags || []).slice(0, 3).map((tag: string) => (
+                              <span
+                                key={tag}
+                                className="inline-block rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-500"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <div className="mt-auto pt-3 border-t border-slate-100">
+                          <button
+                            onClick={() => {
+                              onSelect(t.id);
+                              onClose();
+                            }}
+                            className={`inline-flex h-8 w-full items-center justify-center rounded text-xs font-medium transition ${
+                              active
+                                ? "bg-brand-600 text-white hover:bg-brand-700"
+                                : "bg-slate-900 text-white hover:bg-slate-800"
+                            }`}
+                          >
+                            {active ? "Selected" : "Select this"}
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  </button>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+              {items.length === 0 && (
+                <div className="rounded-lg border border-dashed border-slate-300 bg-white p-12 text-center text-sm text-slate-500">
+                  No templates match your search.
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -327,7 +561,17 @@ function BuilderContent() {
   const [previewHtml, setPreviewHtml] = useState<string>("");
   const [rendering, setRendering] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [previewMode, setPreviewMode] = useState(() => params.get("preview") === "1");
+  const previewIframeRef = useRef<HTMLIFrameElement>(null);
   const didInitRef = useRef(false);
+
+  function togglePreview(v: boolean) {
+    setPreviewMode(v);
+    const url = new URL(window.location.href);
+    if (v) url.searchParams.set("preview", "1");
+    else url.searchParams.delete("preview");
+    window.history.replaceState({}, "", url.toString());
+  }
 
   // Load existing resume (or stay blank). Runs once on mount.
   useEffect(() => {
@@ -357,6 +601,18 @@ function BuilderContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resumeIdParam]);
 
+  // Escape key exits preview mode
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" && previewMode) {
+        e.preventDefault();
+        togglePreview(false);
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [previewMode]);
+
   const updateBasics = useCallback((patch: Partial<Basics>) => {
     setData((d) => ({ ...d, basics: { ...d.basics, ...patch } }));
   }, []);
@@ -367,6 +623,39 @@ function BuilderContent() {
       basics: { ...d.basics, location: { ...d.basics.location, ...patch } },
     }));
   }, []);
+
+  function isSectionFilled(id: SectionId): boolean {
+    switch (id) {
+      case "basics":
+        return !!(data.basics.name || data.basics.label || data.basics.email);
+      case "summary":
+        return !!data.basics.summary;
+      case "work":
+        return data.work.some((w) => w.name || w.position);
+      case "education":
+        return data.education.some((e) => e.institution || e.area);
+      case "skills":
+        return data.skills.some((s) => s.name || (s.keywords || []).length);
+      case "projects":
+        return data.projects.some((p) => p.name || p.description);
+      case "certifications":
+        return data.certifications.some((c) => c.name || c.issuer);
+      case "languages":
+        return data.languages.some((l) => l.language);
+      case "awards":
+        return data.awards.some((a) => a.title || a.awarder);
+      default:
+        return false;
+    }
+  }
+
+  function scrollToSection(id: SectionId) {
+    setOpen((o) => ({ ...o, [id]: true }));
+    setTimeout(() => {
+      const el = document.getElementById(`section-${id}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+  }
 
   function updateList<K extends keyof ResumeData>(
     key: K,
@@ -415,6 +704,32 @@ function BuilderContent() {
     }
   }
 
+  function cleanData(d: ResumeData): any {
+    const b = d.basics;
+    const hasBasics =
+      b.name || b.label || b.email || b.phone || b.url || b.summary ||
+      b.location.city || b.location.region || b.location.countryCode;
+
+    const work = d.work.filter((w) => w.name || w.position || w.summary || (w.highlights || []).length);
+    const education = d.education.filter((e) => e.institution || e.area || e.studyType);
+    const skills = d.skills.filter((s) => s.name || (s.keywords || []).length);
+    const projects = d.projects.filter((p) => p.name || p.description || (p.highlights || []).length);
+    const certifications = d.certifications.filter((c) => c.name || c.issuer);
+    const languages = d.languages.filter((l) => l.language);
+    const awards = d.awards.filter((a) => a.title || a.awarder);
+
+    return {
+      basics: hasBasics ? b : { name: "", label: "", email: "", phone: "", url: "", summary: "", location: { address: "", city: "", region: "", countryCode: "" }, profiles: [] },
+      work: work.length ? work : undefined,
+      education: education.length ? education : undefined,
+      skills: skills.length ? skills : undefined,
+      projects: projects.length ? projects : undefined,
+      certifications: certifications.length ? certifications : undefined,
+      languages: languages.length ? languages : undefined,
+      awards: awards.length ? awards : undefined,
+    };
+  }
+
   async function refreshPreview(useData?: ResumeData, useTemplate?: number) {
     const payloadData = useData ?? data;
     const tpl = useTemplate ?? templateId;
@@ -423,7 +738,7 @@ function BuilderContent() {
       const res = await fetch(`/api/templates/${tpl}/render`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resume: payloadData }),
+        body: JSON.stringify({ resume: cleanData(payloadData) }),
       });
       if (!res.ok) {
         setPreviewHtml(
@@ -446,6 +761,37 @@ function BuilderContent() {
   async function saveAndPreview() {
     save();
     await refreshPreview();
+    togglePreview(true);
+  }
+
+  async function downloadPdf() {
+    if (!rendering && !previewHtml) return;
+
+    try {
+      const res = await fetch(`/api/templates/${templateId}/pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resume: cleanData(data) }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        alert(err?.message || "PDF generation failed");
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${title || "resume"}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("PDF generation failed. Please try again.");
+    }
   }
 
   // Render once after first data load completes
@@ -459,7 +805,8 @@ function BuilderContent() {
 
   return (
     <div className="flex min-h-screen flex-col bg-[#fafafa]">
-      {/* Top bar */}
+      {/* Top bar — hidden in preview mode */}
+      {!previewMode && (
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">
         <div className="mx-auto flex h-14 max-w-[1600px] items-center justify-between px-6">
           <div className="flex items-center gap-3">
@@ -486,19 +833,6 @@ function BuilderContent() {
               Template #{templateId}
             </button>
             <button
-              onClick={() => refreshPreview()}
-              disabled={rendering}
-              className="inline-flex h-9 items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:border-slate-400 disabled:opacity-60"
-            >
-              {rendering ? "Rendering…" : "Refresh Preview"}
-            </button>
-            <Link
-              href={resumeId ? `/ats?resumeId=${resumeId}` : "/ats"}
-              className="inline-flex h-9 items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:border-slate-400"
-            >
-              Run ATS
-            </Link>
-            <button
               onClick={save}
               disabled={saving}
               className="inline-flex h-9 items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:border-slate-400 disabled:opacity-60"
@@ -515,33 +849,78 @@ function BuilderContent() {
           </div>
         </div>
       </header>
+      )}
+
+      {/* Full-screen preview mode */}
+      {previewMode && (
+        <div className="flex flex-1 flex-col">
+          <header className="fixed top-0 left-0 right-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white/95 px-6 py-3 shadow-sm backdrop-blur">
+            <button
+              onClick={() => togglePreview(false)}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:border-slate-400 hover:bg-slate-50 hover:text-slate-900"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="19" y1="12" x2="5" y2="12" />
+                <polyline points="12 19 5 12 12 5" />
+              </svg>
+              Back to Edit
+            </button>
+            <button
+              onClick={downloadPdf}
+              className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              Download PDF
+            </button>
+          </header>
+          <div className="flex flex-1 items-start justify-center bg-slate-200 pt-[68px]">
+            {previewHtml ? (
+              <FullPagePreview html={previewHtml} iframeRef={previewIframeRef} />
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-slate-500">
+                Rendering your resume…
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Two-column workspace */}
+      {!previewMode && (
       <div className="mx-auto grid w-full max-w-[1600px] flex-1 grid-cols-1 gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         {/* LEFT: form */}
-        <div className="space-y-4 lg:max-h-[calc(100vh-110px)] lg:overflow-y-auto lg:pr-2">
-          {/* Section toggles */}
-          <div className="flex flex-wrap gap-1.5">
-            {SECTIONS.map((s) => (
-              <button
-                key={s.id}
-                onClick={() =>
-                  setOpen((o) => ({ ...o, [s.id]: !o[s.id] }))
-                }
-                className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-                  open[s.id]
-                    ? "border-brand-500 bg-brand-50 text-brand-700"
-                    : "border-slate-300 bg-white text-slate-600 hover:border-slate-400"
-                }`}
-              >
-                {s.label}
-              </button>
-            ))}
+        <div className="flex flex-col lg:max-h-[calc(100vh-110px)]">
+          {/* Section toggles - sticky */}
+          <div className="sticky top-0 z-10 mb-4 flex flex-wrap gap-1.5 rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur">
+            {SECTIONS.map((s) => {
+              const filled = isSectionFilled(s.id);
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => scrollToSection(s.id)}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-all duration-200 hover:scale-105 hover:shadow-md active:scale-95 ${
+                    filled
+                      ? "border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-200 hover:border-purple-500 hover:text-purple-800"
+                      : "border-slate-200 bg-white text-slate-500 hover:border-purple-300 hover:bg-purple-50 hover:text-purple-600"
+                  }`}
+                >
+                  {filled && "✓ "}
+                  {s.label}
+                </button>
+              );
+            })}
           </div>
+
+          {/* Scrollable sections */}
+          <div className="flex-1 space-y-4 overflow-y-auto pr-2">
 
           {/* Basics */}
           {open.basics && (
-            <SectionShell title="Basics">
+            <SectionShell title="Basics" id="section-basics">
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <Field
                   label="Full name"
@@ -598,7 +977,7 @@ function BuilderContent() {
 
           {/* Summary */}
           {open.summary && (
-            <SectionShell title="Summary">
+            <SectionShell title="Summary" id="section-summary">
               <Field
                 label="Professional summary"
                 value={data.basics.summary}
@@ -614,6 +993,7 @@ function BuilderContent() {
           {open.work && (
             <SectionShell
               title="Work Experience"
+              id="section-work"
               addLabel="Add role"
               onAdd={() =>
                 addRow("work", {
@@ -705,6 +1085,7 @@ function BuilderContent() {
           {open.education && (
             <SectionShell
               title="Education"
+              id="section-education"
               addLabel="Add school"
               onAdd={() =>
                 addRow("education", {
@@ -776,6 +1157,7 @@ function BuilderContent() {
           {open.skills && (
             <SectionShell
               title="Skills"
+              id="section-skills"
               addLabel="Add skill group"
               onAdd={() => addRow("skills", { name: "", level: "", keywords: [] })}
             >
@@ -835,6 +1217,7 @@ function BuilderContent() {
           {open.projects && (
             <SectionShell
               title="Projects"
+              id="section-projects"
               addLabel="Add project"
               onAdd={() =>
                 addRow("projects", { name: "", description: "", url: "", highlights: [] })
@@ -901,6 +1284,7 @@ function BuilderContent() {
           {open.certifications && (
             <SectionShell
               title="Certifications"
+              id="section-certifications"
               addLabel="Add certification"
               onAdd={() =>
                 addRow("certifications", { name: "", issuer: "", date: "", url: "" })
@@ -955,6 +1339,7 @@ function BuilderContent() {
           {open.languages && (
             <SectionShell
               title="Languages"
+              id="section-languages"
               addLabel="Add language"
               onAdd={() => addRow("languages", { language: "", fluency: "" })}
             >
@@ -997,6 +1382,7 @@ function BuilderContent() {
           {open.awards && (
             <SectionShell
               title="Awards"
+              id="section-awards"
               addLabel="Add award"
               onAdd={() =>
                 addRow("awards", { title: "", awarder: "", date: "", summary: "" })
@@ -1050,6 +1436,7 @@ function BuilderContent() {
               </div>
             </SectionShell>
           )}
+          </div>
         </div>
 
         {/* RIGHT: preview */}
@@ -1086,6 +1473,7 @@ function BuilderContent() {
           </div>
         </div>
       </div>
+      )}
 
       <TemplateModal
         open={showTemplates}

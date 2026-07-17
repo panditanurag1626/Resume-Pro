@@ -7,6 +7,7 @@ import {
   getResume,
   listResumes,
   saveResume,
+  newResumeId,
   type LocalResume,
 } from "@/lib/local-resumes";
 import { calculateAtsScores } from "@/lib/ats";
@@ -179,6 +180,8 @@ export default function AtsAnalyzer() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [applied, setApplied] = useState(false);
   const autoRanRef = useRef(false);
 
   const handleDrag = (e: React.DragEvent) => {
@@ -395,6 +398,63 @@ export default function AtsAnalyzer() {
       } finally {
         setLoading(false);
       }
+    }
+  }
+
+  async function onApply() {
+    if (!result?.ai_analysis) return;
+
+    let resumeData: any = null;
+    if (resumeId) {
+      const row = getResume(resumeId);
+      if (row) resumeData = row.data;
+    }
+    if (!resumeData) {
+      try {
+        resumeData = JSON.parse(jsonText);
+      } catch {
+        setError("Could not determine resume data to apply changes to.");
+        return;
+      }
+    }
+
+    setApplying(true);
+    try {
+      const res = await fetch("/api/ai-apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resume: resumeData, ai_analysis: result.ai_analysis }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data?.message || "Failed to apply AI suggestions.");
+        return;
+      }
+      const json = await res.json();
+      const updatedData = json.data;
+      const changes = json.changes || [];
+
+      const id = resumeId || newResumeId();
+      const existing = resumeId ? getResume(resumeId) : null;
+      saveResume({
+        id,
+        title: existing?.title || "AI-Enhanced Resume",
+        templateId: existing?.templateId || 1,
+        data: updatedData,
+        lastAtsScore: result?.rule_based?.overall_score,
+      });
+
+      setApplied(true);
+      setOptions(listResumes());
+      setResumeId(id);
+
+      if (changes.length > 0) {
+        alert("Applied " + changes.length + " AI improvement(s):\n\n" + changes.join("\n"));
+      }
+    } catch {
+      setError("Failed to apply AI suggestions.");
+    } finally {
+      setApplying(false);
     }
   }
 
@@ -642,6 +702,41 @@ export default function AtsAnalyzer() {
                     Based on contact info, work history, quantification,
                     keywords and structure.
                   </p>
+
+                  {/* Apply AI Suggestions button */}
+                  {result.ai_analysis && !applied && (
+                    <button
+                      onClick={onApply}
+                      disabled={applying}
+                      className="mt-4 inline-flex h-10 items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 px-5 text-sm font-medium text-white shadow-sm transition hover:from-indigo-700 hover:to-purple-700 disabled:opacity-60"
+                    >
+                      {applying ? (
+                        <>
+                          <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                          Applying...
+                        </>
+                      ) : (
+                        <>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707" />
+                            <circle cx="12" cy="12" r="4" />
+                          </svg>
+                          Apply AI Suggestions
+                        </>
+                      )}
+                    </button>
+                  )}
+                  {applied && (
+                    <p className="mt-3 text-sm font-medium text-emerald-600">
+                      AI suggestions applied.{" "}
+                      <a href={`/builder?resumeId=${resumeId}`} className="underline">
+                        Open in builder
+                      </a>
+                    </p>
+                  )}
                   {result.rule_based?.stats && (
                     <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
                       {Object.entries(result.rule_based.stats)

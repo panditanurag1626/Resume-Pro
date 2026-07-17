@@ -41,7 +41,7 @@ async function loadTemplates(): Promise<Template[]> {
     });
     if (res.ok) {
       const json = await res.json();
-      const arr = json?.templates || [];
+      const arr = json?.data?.templates || json?.templates || [];
       if (Array.isArray(arr) && arr.length) return arr;
     }
   } catch {
